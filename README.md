@@ -136,6 +136,21 @@ On OpenBSD, as root where it says `doas`:
    doas deadman status
    ```
 
+7. **Mail that arrives:** deadman knows only that sendmail accepted its
+   mail, not that it was delivered, so check that mail from this host
+   reaches the checks' addresses. A throwaway check with a period and a
+   grace time of `1m`, pinged once and then left alone, should mail that
+   it is down within about three minutes, and that it is up again a
+   minute after the next ping. Then remove its line.
+
+   If the address is at a mail provider that enforces DMARC, mail from
+   the host needs SPF or a DKIM signature for its own domain to get
+   through. A signature made by a filter on smtpd's local socket breaks
+   for mail with bare names in its headers, such as cron's (`From: root`):
+   smtpd adds its domain to them only after filters have seen the
+   message. deadman writes every address in full, but cron and
+   `mail root` do not, so SPF is the dependable choice for those.
+
 ## Pinging
 
 From the end of a job, with `ftp(1)` on OpenBSD or `curl(1)` elsewhere:

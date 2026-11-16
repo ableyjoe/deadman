@@ -143,6 +143,21 @@ And some things about the surroundings:
 - A CDN's proxy in front of the ping name (Cloudflare's orange cloud)
   would see every token, and may turn away clients that are not browsers.
   The name should be DNS only.
+- Mail is where it can fail without anyone hearing: deadman knows only
+  that sendmail accepted the message. On the author's host, root's mail
+  and deadman's were relayed to a provider that enforces DMARC
+  (`p=reject; sp=reject; aspf=s`) and refused them all as spam until the
+  host could pass. Now rspamd signs local mail, through `listen on
+  socket filter rspamd` in smtpd.conf, and an SPF record on the host's
+  name authorises it. The first real mails, a check going down and up
+  again, arrived in November 2026.
+- smtpd adds its domain to bare names in From, To and Cc (cron's `From:
+  root (Cron Daemon)`, `mail root`'s `To: root`) only after filters have
+  seen the message. So rspamd, as a filter, sees no domain in such a
+  From (`use_domain_sign_local = "envelope"` makes it sign anyway), and
+  any signature over those headers is spoilt by the rewriting. deadman
+  writes every address in full, so its signatures survive; SPF covers
+  the rest.
 
 ## Releases, and the port
 

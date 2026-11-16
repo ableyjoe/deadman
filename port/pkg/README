@@ -65,3 +65,16 @@ minute, deadman makes the check's ping files, and its URL starts working:
 Jobs ping that URL when they succeed, and may add /start when they start
 and /fail when they fail. deadman mails a check's address when it goes
 down and when it comes back up.
+
+Mail
+====
+
+deadman knows only that sendmail(8) accepted its mail, not that it was
+delivered, so check that mail from this host reaches the checks'
+addresses. A throwaway check with a period and a grace time of 1m, pinged
+once and then left alone, should mail that it is down within about three
+minutes, and that it is up again a minute after the next ping. Then
+remove its line.
+
+A provider that enforces DMARC will refuse mail from this host unless it
+passes SPF, or carries a DKIM signature, for the host's own domain.
