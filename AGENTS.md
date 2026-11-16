@@ -127,6 +127,9 @@ on OpenBSD 8.0 amd64, in November 2026:
 - `_deadman`, without being in group `www`, creates files that are group
   `www` in its `_deadman:www` directory.
 
+The tests, once made portable, passed on OpenBSD 8.0 too, with pledge
+and unveil in force, at what became v1.0.
+
 And some things about the surroundings:
 
 - Base has no curl and no git. ftp(1) fetches HTTPS (`ftp -V -o - URL`);
@@ -165,7 +168,9 @@ and `@sample`.
 To release version V:
 
 1. Check that `make test` passes on OpenBSD.
-2. `git tag -a vV -m "deadman V"`, and push the tag.
+2. Tag the release commit `vV`, with git or on GitHub's release page,
+   which can make the tag (choose the commit as its target, not `main`).
+   An agent's session may be allowed to push branches but not tags.
 3. Make the distfile, which comes out the same every time, and upload it
    to a GitHub release for the tag:
    `git archive --format=tar --prefix=deadman-V/ vV | gzip -9n >deadman-V.tar.gz`
