@@ -261,7 +261,22 @@ Building the port, as on the author's host for v1.0 (OpenBSD 8.0, with
   files that other packages also install.
 - `DEBUG_PACKAGES = ${BUILD_PACKAGES}`, as reviewers ask of new C ports,
   builds with `-g`, installs unstripped, and splits the debug information
-  into `debug-deadman-V.tgz`.
+  into `debug-deadman-V.tgz`. It needs `devel/dwz`: without it, the
+  framework builds dwz and then fails to install it, through the same
+  doas rule that drops `TRUSTED_PKG_PATH`. `doas pkg_add dwz` first, from
+  the signed packages, avoids that.
+- The framework records each package's packing list under
+  `/usr/ports/plist`, and refuses a later build of the same version with
+  a different list ("change in plist ... forgot to bump a REVISION").
+  For a port not yet in the tree, `make clean=plist` forgets the record;
+  a REVISION is for changes after it is committed.
+- `update-plist` leaves its old list as `pkg/PLIST.orig`, which
+  portcheck calls an extra file. Remove it before packing the port up.
+- With all that, v1.1's checks were clean, debug package included: make
+  test, make package, port-lib-depends-check, update-plist and
+  portcheck. The port was then packed with `tar czf deadman-port.tgz
+  deadman` from `/usr/ports/mystuff/sysutils`, to attach to the mail to
+  ports@.
 
 ## Testing
 
