@@ -28,7 +28,8 @@ so give commands to type, one step at a time, and ask for their output.
 He uses ksh and doas. Tokens are capabilities: never put a real one, or
 the author's ping URLs, in the repository.
 
-Next: an OpenBSD port, to submit to the ports maintainers.
+`port/` is an OpenBSD port, for submission to the ports tree; see
+"Releases, and the port" below.
 
 ## Files
 
@@ -42,6 +43,7 @@ Next: an OpenBSD port, to submit to the ports maintainers.
 | `Makefile`, `deadman/Makefile`, `deadman.cgi/Makefile` | `bsd.subdir.mk` and `bsd.prog.mk`; `make test` |
 | `tests/run-tests.sh` | the tests |
 | `tests/filetime.c` | gets and sets file times for the tests, since stat(1) and touch(1) differ between systems |
+| `port/` | the OpenBSD port, `sysutils/deadman`, laid out as in the ports tree |
 
 `deadman/Makefile` installs `deadman` in `/usr/local/sbin`, its manual
 pages in `/usr/local/man`, and `deadman.conf` as an example in
@@ -138,6 +140,37 @@ And some things about the surroundings:
 - A CDN's proxy in front of the ping name (Cloudflare's orange cloud)
   would see every token, and may turn away clients that are not browsers.
   The name should be DNS only.
+
+## Releases, and the port
+
+`port/` is the port, `sysutils/deadman`, laid out as it would be in the
+ports tree: copy it to `/usr/ports/mystuff/sysutils/deadman` to build
+it. It follows the tree's conventions as they were in November 2026:
+www/cgit for a CGI under `/var/www` with the rest under `/usr/local`
+(`@cwd` in the packing list), net/soju and net/neighbot for `@newuser`
+and `@sample`.
+
+- The distfile is a release asset, `deadman-V.tar.gz`, as the ports
+  template prefers to GitHub's generated archives.
+- `_deadman` is UID and GID 906, the next free in
+  `infrastructure/db/user.list` when the port was written. Check that it
+  is still free when submitting, and include the line for that file.
+- The package makes the user, `/etc/deadman.conf` (0600) from the
+  example, and `/var/www/deadman` and `/var/db/deadman`, with `@sample`,
+  which leaves alone any that already exist. `@newuser` likewise leaves
+  an existing `_deadman` alone, whatever its UID.
+- `pkg/README` is the README's installation steps, less the building.
+- The port's `make test` runs `tests/run-tests.sh`.
+
+To release version V:
+
+1. Check that `make test` passes on OpenBSD.
+2. `git tag -a vV -m "deadman V"`, and push the tag.
+3. Make the distfile, which comes out the same every time, and upload it
+   to a GitHub release for the tag:
+   `git archive --format=tar --prefix=deadman-V/ vV | gzip -9n >deadman-V.tar.gz`
+4. In `port/`, set `V` and update `distinfo`, with `make makesum` on
+   OpenBSD, or by hand: `SHA256` is base64, `SIZE` is bytes.
 
 ## Testing
 

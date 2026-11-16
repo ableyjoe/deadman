@@ -1,0 +1,67 @@
++-------------------------------------------------------------------------------
+| Running ${PKGSTEM} on OpenBSD
++-------------------------------------------------------------------------------
+
+deadman works with httpd(8), slowcgi(8), cron(8) and smtpd(8) from the
+base system. The examples below use deadman.example.org as the name for
+the ping URLs.
+
+slowcgi
+=======
+
+	# rcctl enable slowcgi
+	# rcctl start slowcgi
+
+httpd
+=====
+
+Give the ping URLs a name of their own. If its DNS is on a CDN, make the
+record DNS only: the CDN's proxy would see every token.
+
+httpd will not load a TLS server whose certificate does not exist yet, so
+first get a certificate for the name with acme-client(1), using a server
+on port 80 like the first one in /etc/examples/httpd.conf. Then add a
+server for the pings to /etc/httpd.conf, and reload httpd:
+
+	server "deadman.example.org" {
+		listen on * tls port 443
+		tls {
+			certificate "/etc/ssl/deadman.example.org.fullchain.pem"
+			key "/etc/ssl/private/deadman.example.org.key"
+		}
+		location "/ping/*" {
+			fastcgi socket "/run/slowcgi.sock"
+			root "/cgi-bin/deadman.cgi"
+		}
+		location * {
+			block return 404
+		}
+	}
+
+acme-client exits 2 when there is nothing to renew, so renew from
+/etc/daily.local rather than behind cron's -n flag:
+
+	acme-client deadman.example.org && rcctl reload httpd
+
+cron
+====
+
+Run deadman every minute, one at a time, with mail to root only if it
+fails, from root's crontab(5):
+
+	*	*	*	*	*	-sn ${PREFIX}/sbin/deadman
+
+Checks
+======
+
+Make a token with "deadman token", and add a line for the check to
+${SYSCONFDIR}/deadman.conf, as described in deadman.conf(5). Within a
+minute, deadman makes the check's ping files, and its URL starts working:
+
+	$ ftp -V -o - https://deadman.example.org/ping/TOKEN
+	OK
+	# deadman status
+
+Jobs ping that URL when they succeed, and may add /start when they start
+and /fail when they fail. deadman mails a check's address when it goes
+down and when it comes back up.

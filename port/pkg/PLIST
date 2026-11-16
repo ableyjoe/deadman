@@ -1,0 +1,23 @@
+@newgroup _deadman:906
+@newuser _deadman:906:906::deadman user:/var/empty:/sbin/nologin
+@man man/man5/deadman.conf.5
+@man man/man8/deadman.8
+@man man/man8/deadman.cgi.8
+@bin sbin/deadman
+share/doc/pkg-readmes/${PKGSTEM}
+share/examples/deadman/
+share/examples/deadman/deadman.conf
+@mode 600
+@sample ${SYSCONFDIR}/deadman.conf
+@mode 710
+@owner _deadman
+@group www
+@sample /var/www/deadman/
+@mode 700
+@group _deadman
+@sample /var/db/deadman/
+@mode
+@owner
+@group
+@cwd /var/www
+@bin cgi-bin/deadman.cgi

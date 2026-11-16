@@ -149,6 +149,14 @@ Add `/start` to the URL when a job starts, or `/fail` when it fails. A
 job that only pings when it succeeds is enough: silence is what deadman
 watches for.
 
+## Packaging
+
+`port/` is a port for OpenBSD's ports tree, `sysutils/deadman`. Until
+it is in the tree, copy it to `/usr/ports/mystuff/sysutils/deadman` and
+build a package there. The package does steps 1 and 2 above: the user,
+the files and directories, and `/etc/deadman.conf`. Its README, in
+`/usr/local/share/doc/pkg-readmes/deadman`, gives the rest.
+
 ## Testing
 
 ```sh

@@ -1,0 +1,15 @@
+deadman is a dead man's switch: jobs ping a URL of their own when they
+run, and deadman sends mail when the pings stop. It does the core of
+what healthchecks.io does, with the base system: httpd(8) and slowcgi(8)
+take the pings, cron(8) runs the checks, and smtpd(8) sends the mail.
+There is no daemon and no database.
+
+Each check has a period and a grace time, and is new, up, late or down.
+A job can also report that it has started, so that a run that hangs
+counts as down, or that it has failed.
+
+The ping recorder is static and runs in httpd's chroot. It accepts only
+well-formed tokens, and can do nothing but set the modification time of
+a file that deadman made for a configured check. The checker reads its
+configuration as root and then drops privileges. Both use pledge(2) and
+unveil(2).
