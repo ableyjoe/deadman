@@ -49,7 +49,8 @@ the author's ping URLs, in the repository.
 pages in `/usr/local/man`, and `deadman.conf` as an example in
 `/usr/local/share/examples/deadman`. Its `beforeinstall` refuses to go on
 without the `_deadman` user, and its `afterinstall` makes the two
-directories and installs `/etc/deadman.conf`, 0600, if there is none.
+directories and installs `/etc/deadman.conf`, `root:_deadman` 0640, if
+there is none.
 `deadman.cgi/Makefile` installs `deadman.cgi`, static, in
 `/var/www/cgi-bin`.
 
@@ -84,12 +85,18 @@ also strips `-o` and `-g` from `install` while staging.
   is not exactly 32 lowercase hexadecimal digits, before touching the file
   system, as a second line of defence. The tests plant a file with a
   malformed name to check that this layer works on its own.
-- **The checker reads its config as root, then drops privileges** to
-  `_deadman` (`setgroups`, `setresgid`, `setresuid`), and then unveils its
-  two directories and `sendmail`, and pledges `stdio rpath wpath cpath
-  fattr proc exec` (`stdio rpath` for `status` and `-n`). The config is
-  0600 root because tokens are capabilities. `tzset()` and `gethostname()`
-  happen before unveil.
+- **The checker needs no privileges.** Since 1.1 it runs from
+  `_deadman`'s crontab, as `_deadman`, which owns its two directories.
+  The config is `root:_deadman` 0640: tokens are capabilities, but
+  `_deadman` can already see them all as the names of its ping files, so
+  reading the config as root kept nothing secret. Started as root, as by
+  `doas deadman status`, it drops to `_deadman` (`setgroups`,
+  `setresgid`, `setresuid`) before reading anything; started as anyone
+  else, it stays as it is and file permissions decide. It then unveils
+  the config, its two directories and `sendmail`, pledges `stdio rpath
+  wpath cpath fattr proc exec` (`stdio rpath` for `status` and `-n`), and
+  only then reads the config. `tzset()` and `gethostname()` happen before
+  unveil. 1.0 read the config as root and refused to run as anyone else.
 - **States follow healthchecks.io's simple schedules:** new, up, late,
   down, from the last success, start and fail times. A start does not
   change the state, only the time a run has to finish (`grace`): a check
@@ -140,6 +147,12 @@ And some things about the surroundings:
 - acme-client exits 2 when there was nothing to renew, so it does not go
   behind cron's `-n`, which would mail about that every day.
   `/etc/daily.local` suits it.
+- From crontab(1), crontab(5) and cron's source, for 1.1: cron runs a
+  user's crontab with `/bin/sh`, whatever the login shell, so
+  `_deadman`'s `/sbin/nologin` does not matter; `cron.allow` governs only
+  who may run crontab(1), and root may install a crontab for any user
+  with `crontab -u`. `MAILTO=root` sends cron's mail about a
+  pseudo-user's jobs somewhere it is read, as crontab(5) suggests.
 - A CDN's proxy in front of the ping name (Cloudflare's orange cloud)
   would see every token, and may turn away clients that are not browsers.
   The name should be DNS only.
@@ -173,10 +186,12 @@ and `@sample`.
 - `_deadman` is UID and GID 906, the next free in
   `infrastructure/db/user.list` when the port was written. Check that it
   is still free when submitting, and include the line for that file.
-- The package makes the user, `/etc/deadman.conf` (0600) from the
-  example, and `/var/www/deadman` and `/var/db/deadman`, with `@sample`,
-  which leaves alone any that already exist. `@newuser` likewise leaves
-  an existing `_deadman` alone, whatever its UID.
+- The package makes the user, `/etc/deadman.conf` (`root:_deadman`
+  0640) from the example, and `/var/www/deadman` and `/var/db/deadman`,
+  with `@sample`, which leaves alone any that already exist. `@newuser`
+  likewise leaves an existing `_deadman` alone, whatever its UID. Nor
+  does `@sample` change an existing config's mode, so going from 1.0 to
+  1.1 needs the steps in the README's "Upgrading from 1.0".
 - `pkg/README` is the README's installation steps, less the building.
 - The port's `make test` runs `tests/run-tests.sh`.
 
@@ -189,6 +204,8 @@ To release version V:
 3. Make the distfile, which comes out the same every time, and upload it
    to a GitHub release for the tag:
    `git archive --format=tar --prefix=deadman-V/ vV | gzip -9n >deadman-V.tar.gz`
+   `.gitattributes` keeps `port/` out of it, since a distfile cannot
+   carry its own checksum.
 4. In `port/`, set `V` and update `distinfo`, with `make makesum` on
    OpenBSD, or by hand: `SHA256` is base64, `SIZE` is bytes.
 

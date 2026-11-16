@@ -42,9 +42,13 @@ schedules, and any alert but mail. `deadman status` is the dashboard.
   nothing from the request; an unknown token is a 404. `pledge("stdio
   rpath fattr")` and `unveil` confine it to that, and the ping directory
   is not readable by `www`, so it cannot even list the tokens.
-- **The checking side gives up root at once.** `deadman` reads its
-  configuration, which holds the tokens and is mode 0600, as root; then it
-  becomes `_deadman`, and `pledge` and `unveil` confine it to its two
+- **The checking side never needs root.** `deadman` runs from the
+  `_deadman` user's crontab, as `_deadman`, which owns its two
+  directories. Its configuration holds the tokens, so only `_deadman` may
+  read it (owner root, group `_deadman`, mode 0640); `_deadman` could see
+  them anyway, as the names of the ping files. Started as root, as by
+  `doas deadman status`, it becomes `_deadman` before reading anything.
+  `pledge` and `unveil` confine it to its configuration, its two
   directories and `sendmail`.
 - **Tokens are 128 random bits**, made by `deadman token` with
   `arc4random`. Removing a check's line revokes its URL on the next run.
@@ -64,8 +68,8 @@ On OpenBSD, as root where it says `doas`:
    `/usr/local/sbin`, `deadman.cgi` in `/var/www/cgi-bin`, the manual pages
    in `/usr/local/man`, an example configuration in
    `/usr/local/share/examples/deadman`, and a copy of it in
-   `/etc/deadman.conf` if there is none yet, and makes `/var/www/deadman`
-   and `/var/db/deadman`:
+   `/etc/deadman.conf`, readable by `_deadman` alone, if there is none
+   yet, and makes `/var/www/deadman` and `/var/db/deadman`:
 
    ```sh
    git clone https://github.com/ableyjoe/deadman
@@ -113,12 +117,19 @@ On OpenBSD, as root where it says `doas`:
    acme-client deadman.example.org && rcctl reload httpd
    ```
 
-5. **cron:** add this to root's crontab with `doas crontab -e`. It runs
-   deadman every minute, one at a time, mailing root only if it fails:
+5. **cron:** give `_deadman` a crontab that runs deadman every minute, one
+   at a time, and mails root only if it fails. It replaces any crontab
+   `_deadman` had, which is none unless you made one:
 
+   ```sh
+   printf 'MAILTO=root\n*\t*\t*\t*\t*\t-sn /usr/local/sbin/deadman\n' |
+       doas crontab -u _deadman -
+   doas crontab -u _deadman -l
    ```
-   *	*	*	*	*	-sn /usr/local/sbin/deadman
-   ```
+
+   cron runs it with `/bin/sh` whatever `_deadman`'s login shell, and
+   `MAILTO` sends cron's mail about it to root, since `_deadman` has no
+   mailbox anyone reads.
 
 6. **A check:** make a token, and add a line to `/etc/deadman.conf`
    (see `deadman.conf(5)`):
@@ -150,6 +161,22 @@ On OpenBSD, as root where it says `doas`:
    smtpd adds its domain to them only after filters have seen the
    message. deadman writes every address in full, but cron and
    `mail root` do not, so SPF is the dependable choice for those.
+
+## Upgrading from 1.0
+
+deadman 1.0 ran from root's crontab and read its configuration as root.
+From 1.1 it runs as `_deadman`, so the configuration must be readable by
+`_deadman`, and the cron line moves to `_deadman`'s crontab. Change the
+configuration first: run as root, 1.1 becomes `_deadman` before reading
+it, so the old crontab line goes on working in the meantime.
+
+```sh
+doas chgrp _deadman /etc/deadman.conf
+doas chmod 0640 /etc/deadman.conf
+```
+
+Then install 1.1, take the deadman line out of root's crontab with
+`doas crontab -e`, and give `_deadman` its crontab as in step 5.
 
 ## Pinging
 

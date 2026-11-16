@@ -71,13 +71,17 @@ Being late sends nothing.
 Mail that cannot be sent is tried again on the next run.
 .Pp
 .Nm
-reads its configuration as root, then becomes the
+runs as the
 .Dq _deadman
-user, and
+user, which owns its two directories and can read its configuration, and
+needs no other privileges.
+Started as root, it becomes
+.Dq _deadman
+before reading anything.
 .Xr pledge 2
 and
 .Xr unveil 2
-confine it to its two directories and
+confine it to its configuration, its two directories and
 .Xr sendmail 8 .
 On each run it makes the ping files for any new check, and removes those
 of any check no longer configured, whose ping URL then stops working.
@@ -91,7 +95,7 @@ This is the default.
 Show each check's state, its last ping, and when the next is due.
 .It Cm token
 Print a new token, 32 random hexadecimal digits, for a check's ping URL.
-It needs neither root nor the configuration.
+It needs no configuration, and anyone can run it.
 .El
 .Pp
 The options are:
@@ -122,7 +126,7 @@ What the ping URLs run.
 .Ex -std
 Mail that could not be sent is an error, which
 .Xr cron 8
-reports by mail to root.
+reports by mail, to root with the crontab below.
 .Sh EXAMPLES
 Make a token, then add a check that should ping daily, with a day's
 grace:
@@ -133,10 +137,17 @@ $ deadman token
 	>>/etc/deadman.conf
 .Ed
 .Pp
-Run it every minute, from root's
+Run it every minute, as
+.Dq _deadman ,
+only once at a time, with mail to root if it fails.
+In the
+.Dq _deadman
+user's
 .Xr crontab 5 ,
-only once at a time, and with no mail unless it fails:
+which root can edit with
+.Ql crontab -u _deadman -e :
 .Bd -literal -offset indent
+MAILTO=root
 *	*	*	*	*	-sn /usr/local/sbin/deadman
 .Ed
 .Pp
@@ -159,6 +170,7 @@ NAME     STATE  LAST PING              DUE
 backups  up     2026-11-16 03:17 CET   2026-11-17 03:17 CET
 .Ed
 .Sh SEE ALSO
+.Xr crontab 1 ,
 .Xr crontab 5 ,
 .Xr deadman.conf 5 ,
 .Xr cron 8 ,

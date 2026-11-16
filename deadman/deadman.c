@@ -17,10 +17,11 @@
 /*
  * deadman: send mail when the things that ping deadman.cgi(8) stop.
  *
- * Run from cron(8) as root, it reads deadman.conf(5), drops to the
- * _deadman user, makes sure each check has its ping files, works out from
- * their modification times whether each check is up, late or down, and
- * sends mail when one goes down or comes back up.
+ * Run from the _deadman user's crontab, it reads deadman.conf(5), makes
+ * sure each check has its ping files, works out from their modification
+ * times whether each check is up, late or down, and sends mail when one
+ * goes down or comes back up. It needs no privileges: run as root, it
+ * becomes _deadman before reading anything.
  */
 
 #include <sys/types.h>
@@ -247,6 +248,11 @@ read_config(const char *file)
 	fclose(fp);
 }
 
+/*
+ * deadman is meant to run as _deadman, which owns its directories and can
+ * read deadman.conf(5). Started as root, as by "doas deadman status", it
+ * becomes _deadman; started as anyone else, it stays as it is.
+ */
 static void
 drop_privileges(void)
 {
@@ -256,7 +262,7 @@ drop_privileges(void)
 	return;
 #endif
 	if (geteuid() != 0)
-		errx(1, "must be run as root");
+		return;
 	if ((pw = getpwnam(DEADMAN_USER)) == NULL)
 		errx(1, "there is no %s user", DEADMAN_USER);
 	if (setgroups(1, &pw->pw_gid) == -1 ||
@@ -698,17 +704,17 @@ main(int argc, char *argv[])
 	tzset();
 	if (gethostname(hostname, sizeof(hostname)) == -1)
 		err(1, "gethostname");
-	read_config(conffile);
 	drop_privileges();
 
 	if (strcmp(cmd, "status") == 0 || noaction) {
-		if (unveil(pingdir, "r") == -1 || unveil(statedir, "r") == -1 ||
-		    unveil(NULL, NULL) == -1)
+		if (unveil(conffile, "r") == -1 || unveil(pingdir, "r") == -1 ||
+		    unveil(statedir, "r") == -1 || unveil(NULL, NULL) == -1)
 			err(1, "unveil");
 		if (pledge("stdio rpath", NULL) == -1)
 			err(1, "pledge");
 	} else {
-		if (unveil(pingdir, "rwc") == -1 ||
+		if (unveil(conffile, "r") == -1 ||
+		    unveil(pingdir, "rwc") == -1 ||
 		    unveil(statedir, "rwc") == -1 ||
 		    unveil(sendmail, "x") == -1)
 			err(1, "unveil");
@@ -722,6 +728,7 @@ main(int argc, char *argv[])
 		if (pledge("stdio rpath wpath cpath fattr proc exec", NULL) == -1)
 			err(1, "pledge");
 	}
+	read_config(conffile);
 
 	now = time(NULL);
 #ifdef DEADMAN_TESTING

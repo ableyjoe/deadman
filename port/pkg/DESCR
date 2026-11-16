@@ -10,6 +10,6 @@ counts as down, or that it has failed.
 
 The ping recorder is static and runs in httpd's chroot. It accepts only
 well-formed tokens, and can do nothing but set the modification time of
-a file that deadman made for a configured check. The checker reads its
-configuration as root and then drops privileges. Both use pledge(2) and
-unveil(2).
+a file that deadman made for a configured check. The checker needs no
+privileges: it runs as its own user, from that user's crontab. Both use
+pledge(2) and unveil(2).

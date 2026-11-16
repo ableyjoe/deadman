@@ -7,7 +7,8 @@
 share/doc/pkg-readmes/${PKGSTEM}
 share/examples/deadman/
 share/examples/deadman/deadman.conf
-@mode 600
+@mode 640
+@group _deadman
 @sample ${SYSCONFDIR}/deadman.conf
 @mode 710
 @owner _deadman

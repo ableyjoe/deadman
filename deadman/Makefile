@@ -30,8 +30,8 @@ afterinstall:
 	${INSTALL} -d -o _deadman -g www -m 0710 /var/www/deadman
 	${INSTALL} -d -o _deadman -g _deadman -m 0700 /var/db/deadman
 	@if [ ! -f /etc/deadman.conf ]; then \
-		echo "${INSTALL} -o root -g wheel -m 0600 deadman.conf /etc"; \
-		${INSTALL} -o root -g wheel -m 0600 ${.CURDIR}/../deadman.conf \
+		echo "${INSTALL} -o root -g _deadman -m 0640 deadman.conf /etc"; \
+		${INSTALL} -o root -g _deadman -m 0640 ${.CURDIR}/../deadman.conf \
 		    /etc/deadman.conf; \
 	fi
 .endif

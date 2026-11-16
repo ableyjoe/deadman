@@ -46,10 +46,14 @@ acme-client exits 2 when there is nothing to renew, so renew from
 cron
 ====
 
-Run deadman every minute, one at a time, with mail to root only if it
-fails, from root's crontab(5):
+deadman runs as _deadman, from its own crontab(5). Give it one with
+"crontab -u _deadman -e", containing:
 
+	MAILTO=root
 	*	*	*	*	*	-sn ${PREFIX}/sbin/deadman
+
+That runs deadman every minute, one at a time, and mails root only if it
+fails.
 
 Checks
 ======
