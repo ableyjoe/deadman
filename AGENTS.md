@@ -133,7 +133,11 @@ on OpenBSD 8.0 amd64, in November 2026:
   runs the CGI for every path under it, and passes the whole path,
   `/ping/TOKEN`, as `PATH_INFO`.
 - `utimes(path, NULL)` works under `pledge("stdio rpath fattr")` with the
-  directory unveiled `"w"`.
+  directory unveiled `"w"`. `rpath` is needed: without it, the kernel
+  kills the CGI at syscall 76, `utimes`, because looking up the path
+  counts as reading it. Taking a promise away and running the tests on
+  OpenBSD is how to find out whether it is needed; the killed program
+  leaves a core file in the current directory.
 - `LDSTATIC= ${STATIC}` makes `deadman.cgi` static. file(1) calls it a
   shared object, because OpenBSD links static programs as PIE; `ldd`
   listing nothing but the program is the test.
@@ -248,8 +252,16 @@ Building the port, as on the author's host for v1.0 (OpenBSD 8.0, with
   `/etc/deadman.conf`, and the ping and state files stay. Cron fails
   each minute until the package is in, mailing root each time.
 - For v1.0, `make test`, `make package`, `make port-lib-depends-check`
-  and `portcheck` were all clean; for v1.1, `make test` and `make
-  package` were.
+  and `portcheck` were all clean, and for v1.1 too. Reviewers also run
+  `make update-plist`, which rewrites the packing list from what the
+  package installs; `pkg/PLIST` is as it writes it (it puts `@cwd`
+  before the `@mode`, `@owner` and `@group` that reset them). Its "DON'T
+  BUILD PORTS AS ROOT" is the doas rule dropping the environment again,
+  and harmless; "pkglocatedb not installed" means it could not check for
+  files that other packages also install.
+- `DEBUG_PACKAGES = ${BUILD_PACKAGES}`, as reviewers ask of new C ports,
+  builds with `-g`, installs unstripped, and splits the debug information
+  into `debug-deadman-V.tgz`.
 
 ## Testing
 

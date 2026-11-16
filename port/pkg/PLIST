@@ -17,8 +17,8 @@ share/examples/deadman/deadman.conf
 @mode 700
 @group _deadman
 @sample /var/db/deadman/
+@cwd /var/www
 @mode
 @owner
 @group
-@cwd /var/www
 @bin cgi-bin/deadman.cgi

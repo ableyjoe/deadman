@@ -15,6 +15,8 @@ PERMIT_PACKAGE =	Yes
 # uses pledge() and unveil()
 WANTLIB =	c
 
+DEBUG_PACKAGES =	${BUILD_PACKAGES}
+
 SITES =		https://github.com/ableyjoe/deadman/releases/download/v${V}/
 
 .include <bsd.port.mk>
