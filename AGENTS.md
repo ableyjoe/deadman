@@ -177,6 +177,28 @@ To release version V:
 4. In `port/`, set `V` and update `distinfo`, with `make makesum` on
    OpenBSD, or by hand: `SHA256` is base64, `SIZE` is bytes.
 
+Building the port, as on the author's host for v1.0 (OpenBSD 8.0, with
+`ports.tar.gz` from the release, checked with signify):
+
+- `/etc/mk.conf` has `PORTS_PRIVSEP=Yes` and `SUDO=doas`, and
+  `/etc/doas.conf` lets the author's user run commands as `_pbuild` and
+  `_pfetch` without a password, as bsd.port.mk(5) suggests. Run `make`
+  as yourself: `doas make` fails with "doas: Operation not permitted",
+  because root has no rule for becoming `_pbuild`. `make
+  fix-permissions` alone is run as root, once.
+- Add the `_deadman` line to the local `user.list` before building.
+- `make install` passes `TRUSTED_PKG_PATH` through doas, which a rule
+  without `keepenv` or `setenv` drops, so `pkg_add` refuses the unsigned
+  package and says it cannot find it. `doas pkg_add -D unsigned
+  /usr/ports/packages/amd64/all/deadman-V.tgz` works.
+- To replace an installation from source, remove its six files first
+  (the two programs, three manual pages and the example), since
+  `pkg_add` will not overwrite files no package owns. The user,
+  `/etc/deadman.conf`, and the ping and state files stay. Cron fails
+  each minute until the package is in, mailing root each time.
+- For v1.0, `make test`, `make package`, `make port-lib-depends-check`
+  and `portcheck` were all clean.
+
 ## Testing
 
 ```sh
