@@ -21,9 +21,10 @@ security argument that fits in a paragraph.
 The author's deployment, in use since November 2026: OpenBSD 8.0 on
 amd64, a host that already runs httpd with acme-client certificates
 (renewed from `/etc/daily.local`) and smtpd with dovecot, with the ping
-URLs on their own name, a CNAME for that host, DNS only. Its first check
-is proton-firesafe's daily run on a Mac, with a period and grace of a day
-each. The author runs commands on it himself: an agent cannot reach it,
+URLs on their own name, a CNAME for that host, DNS only. It runs 1.1,
+from the package built from `port/`, in `_deadman`'s crontab. Its first
+check is proton-firesafe's daily run on a Mac, with a period and grace of
+a day each. The author runs commands on it himself: an agent cannot reach it,
 so give commands to type, one step at a time, and ask for their output.
 He uses ksh and doas. Tokens are capabilities: never put a real one, or
 the author's ping URLs, in the repository.
@@ -141,7 +142,9 @@ on OpenBSD 8.0 amd64, in November 2026:
   `www` in its `_deadman:www` directory.
 
 The tests, once made portable, passed on OpenBSD 8.0 too, with pledge
-and unveil in force, at what became v1.0.
+and unveil in force, at v1.0 and at v1.1, and in the ports framework,
+which runs them as `_pbuild`, so the test of a config not owned by root
+is skipped there.
 
 And some things about the surroundings:
 
@@ -153,7 +156,8 @@ And some things about the surroundings:
 - acme-client exits 2 when there was nothing to renew, so it does not go
   behind cron's `-n`, which would mail about that every day.
   `/etc/daily.local` suits it.
-- From crontab(1), crontab(5) and cron's source, for 1.1: cron runs a
+- Read in crontab(1), crontab(5) and cron's source, and borne out when
+  the author's host moved to 1.1: cron runs a
   user's crontab with `/bin/sh`, whatever the login shell, so
   `_deadman`'s `/sbin/nologin` does not matter; `cron.allow` governs only
   who may run crontab(1), and root may install a crontab for any user
