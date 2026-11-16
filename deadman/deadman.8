@@ -1,0 +1,179 @@
+.\" Copyright (c) 2026 Joe Abley <jabley@strandkip.nl>
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd November 16, 2026
+.Dt DEADMAN 8
+.Os
+.Sh NAME
+.Nm deadman
+.Nd send mail when jobs stop checking in
+.Sh SYNOPSIS
+.Nm deadman
+.Op Fl n
+.Op Fl f Ar file
+.Op Cm check | status | token
+.Sh DESCRIPTION
+.Nm
+is a dead man's switch.
+Each job it watches, called a check, pings a URL of its own whenever it
+runs, through
+.Xr deadman.cgi 8 ;
+when the pings stop,
+.Nm
+sends mail.
+It is meant to run every minute from
+.Xr cron 8 .
+.Pp
+Each check, listed in
+.Xr deadman.conf 5 ,
+has a period, how often it should ping, and a grace time, how much longer
+to wait before giving up on it.
+A check is in one of four states:
+.Bl -tag -width "late"
+.It new
+It has never pinged.
+.It up
+Its last ping came within its period.
+.It late
+Its period has passed, but not its grace time.
+.It down
+Its period and grace time have passed without a ping; or its last ping
+reported a failure; or it reported starting, and did not finish within
+its grace time.
+.El
+.Pp
+A job can ping in three ways.
+A plain ping says that it ran.
+A ping to
+.Pa start
+says that it has started, so that a run that never finishes counts as
+down once the grace time has passed; it does not otherwise change the
+check's state.
+A ping to
+.Pa fail
+says that it ran and failed, and puts the check down at once.
+.Pp
+.Nm
+sends mail to a check's address when it goes down, and again when it is
+up again.
+Being late sends nothing.
+Mail that cannot be sent is tried again on the next run.
+.Pp
+.Nm
+reads its configuration as root, then becomes the
+.Dq _deadman
+user, and
+.Xr pledge 2
+and
+.Xr unveil 2
+confine it to its two directories and
+.Xr sendmail 8 .
+On each run it makes the ping files for any new check, and removes those
+of any check no longer configured, whose ping URL then stops working.
+.Pp
+The commands are:
+.Bl -tag -width Ds
+.It Cm check
+Work out each check's state, and send mail about any that has changed.
+This is the default.
+.It Cm status
+Show each check's state, its last ping, and when the next is due.
+.It Cm token
+Print a new token, 32 random hexadecimal digits, for a check's ping URL.
+It needs neither root nor the configuration.
+.El
+.Pp
+The options are:
+.Bl -tag -width Ds
+.It Fl f Ar file
+Read the configuration from
+.Ar file
+instead of
+.Pa /etc/deadman.conf .
+.It Fl n
+Show the mail that
+.Cm check
+would send, and change nothing.
+.El
+.Sh FILES
+.Bl -tag -width "/var/www/cgi-bin/deadman.cgi" -compact
+.It Pa /etc/deadman.conf
+The checks.
+.It Pa /var/www/deadman/
+The ping files, three for each check, named after its token; their
+modification times say when each kind of ping last came.
+.It Pa /var/db/deadman/
+Each check's state when it last changed, and when.
+.It Pa /var/www/cgi-bin/deadman.cgi
+What the ping URLs run.
+.El
+.Sh EXIT STATUS
+.Ex -std
+Mail that could not be sent is an error, which
+.Xr cron 8
+reports by mail to root.
+.Sh EXAMPLES
+Make a token, then add a check that should ping daily, with a day's
+grace:
+.Bd -literal -offset indent
+$ deadman token
+6b1e0c3f9a7d42e8b5c1d0f4a2e9c7b3
+# echo "backups 6b1e0c3f9a7d42e8b5c1d0f4a2e9c7b3 1d 1d root" \e
+	>>/etc/deadman.conf
+.Ed
+.Pp
+Run it every minute, from root's
+.Xr crontab 5 ,
+only once at a time, and with no mail unless it fails:
+.Bd -literal -offset indent
+*	*	*	*	*	-sn /usr/local/sbin/deadman
+.Ed
+.Pp
+Ping from the end of a job, using
+.Xr ftp 1
+on
+.Ox
+or
+.Xr curl 1
+elsewhere:
+.Bd -literal -offset indent
+ftp -o /dev/null -V https://deadman.example.org/ping/6b1e0c3f9a7d42e8b5c1d0f4a2e9c7b3
+curl -fsS -m 10 --retry 3 -o /dev/null https://deadman.example.org/ping/6b1e...
+.Ed
+.Pp
+See where things stand:
+.Bd -literal -offset indent
+# deadman status
+NAME     STATE  LAST PING              DUE
+backups  up     2026-11-16 03:17 CET   2026-11-17 03:17 CET
+.Ed
+.Sh SEE ALSO
+.Xr crontab 5 ,
+.Xr deadman.conf 5 ,
+.Xr cron 8 ,
+.Xr deadman.cgi 8 ,
+.Xr sendmail 8
+.Sh AUTHORS
+.An Joe Abley Aq Mt jabley@strandkip.nl ,
+with Claude.
+.Sh CAVEATS
+.Nm
+notices a change only when it runs, so a check goes down up to a
+minute after its time, with the crontab line above.
+.Pp
+Nothing watches
+.Nm
+itself.
+If it, or the machine it runs on, stops, no mail comes at all: run it
+somewhere other than what it watches.

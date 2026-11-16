@@ -1,0 +1,110 @@
+.\" Copyright (c) 2026 Joe Abley <jabley@strandkip.nl>
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd November 16, 2026
+.Dt DEADMAN.CGI 8
+.Os
+.Sh NAME
+.Nm deadman.cgi
+.Nd record pings for deadman
+.Sh SYNOPSIS
+.Nm /var/www/cgi-bin/deadman.cgi
+.Sh DESCRIPTION
+.Nm
+records the pings that
+.Xr deadman 8
+watches.
+.Xr slowcgi 8
+runs it for
+.Xr httpd 8 ,
+in httpd's chroot, for URLs of these forms:
+.Bl -tag -width Ds
+.It Pa .../ Ns Ar TOKEN
+The check whose token is
+.Ar TOKEN
+has run.
+.It Pa .../ Ns Ar TOKEN Ns Pa /start
+It has started.
+.It Pa .../ Ns Ar TOKEN Ns Pa /fail
+It has run and failed.
+.El
+.Pp
+What comes before the token does not matter; the
+.Xr httpd.conf 5
+location decides which URLs reach
+.Nm .
+GET, HEAD and POST all work, and any request body is ignored.
+.Pp
+.Nm
+answers 200 when it has recorded a ping, 404 for a token that is not
+configured or not a token, and 405 for any other method.
+It records a ping by setting the modification time of the matching file in
+.Pa /var/www/deadman ,
+which
+.Xr deadman 8
+creates for each configured check, to now.
+It creates nothing, writes nothing and reads nothing, it repeats nothing
+from the request, and
+.Xr pledge 2
+and
+.Xr unveil 2
+confine it to changing those modification times.
+The ping directory is not readable by httpd's user, so
+.Nm
+cannot list the tokens either.
+.Pp
+It is linked statically, since the chroot has no shared libraries.
+.Sh FILES
+.Bl -tag -width "/var/www/cgi-bin/deadman.cgi" -compact
+.It Pa /var/www/cgi-bin/deadman.cgi
+.It Pa /var/www/deadman/
+The ping files, seen from inside the chroot as
+.Pa /deadman .
+.El
+.Sh EXAMPLES
+Enable
+.Xr slowcgi 8 :
+.Bd -literal -offset indent
+# rcctl enable slowcgi
+# rcctl start slowcgi
+.Ed
+.Pp
+Then, in
+.Xr httpd.conf 5 ,
+a server whose ping URLs are
+.Pa https://deadman.example.org/ping/ Ns Ar TOKEN :
+.Bd -literal -offset indent
+server "deadman.example.org" {
+	listen on * tls port 443
+	tls {
+		certificate "/etc/ssl/deadman.example.org.fullchain.pem"
+		key "/etc/ssl/private/deadman.example.org.key"
+	}
+	location "/ping/*" {
+		fastcgi socket "/run/slowcgi.sock"
+		root "/cgi-bin/deadman.cgi"
+	}
+	location * {
+		block return 404
+	}
+}
+.Ed
+.Sh SEE ALSO
+.Xr deadman.conf 5 ,
+.Xr deadman 8 ,
+.Xr httpd 8 ,
+.Xr slowcgi 8
+.Sh AUTHORS
+.An Joe Abley Aq Mt jabley@strandkip.nl ,
+with Claude.

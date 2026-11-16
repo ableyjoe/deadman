@@ -1,0 +1,83 @@
+.\" Copyright (c) 2026 Joe Abley <jabley@strandkip.nl>
+.\"
+.\" Permission to use, copy, modify, and distribute this software for any
+.\" purpose with or without fee is hereby granted, provided that the above
+.\" copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+.\" WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+.\" MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+.\" ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+.\" WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+.\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+.\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd November 16, 2026
+.Dt DEADMAN.CONF 5
+.Os
+.Sh NAME
+.Nm deadman.conf
+.Nd checks for deadman
+.Sh DESCRIPTION
+.Nm
+lists the checks that
+.Xr deadman 8
+watches, one to a line, each in five fields separated by blanks:
+.Bl -tag -width Ds
+.It Ar name
+What the check is called in mail and status output: up to 64 letters,
+digits, dots, underscores and hyphens, not starting with a dot or a
+hyphen.
+.It Ar token
+The last part of the check's ping URL: 32 lowercase hexadecimal digits,
+which
+.Ql deadman token
+makes.
+Each check needs its own.
+.It Ar period
+How often the check should ping: a whole number followed by
+.Ql s ,
+.Ql m ,
+.Ql h ,
+.Ql d
+or
+.Ql w ,
+for seconds, minutes, hours, days or weeks.
+.It Ar grace
+How much longer to wait, once the period has passed, before calling the
+check down, in the same form.
+It is also how long a run that has pinged
+.Pa start
+has to finish.
+.It Ar mailto
+Where to send mail about the check: an address, a local user, or several
+of either separated by commas, without blanks.
+.El
+.Pp
+A
+.Ql #
+begins a comment, which runs to the end of the line.
+Blank lines are ignored.
+.Pp
+A token is the only thing a ping URL needs, so the file should belong to
+root and be mode 0600;
+.Xr deadman 8
+reads it before giving up root.
+To revoke a token, change or remove its line: on its next run,
+.Xr deadman 8
+removes the old token's ping files, and its URL stops working.
+.Sh FILES
+.Bl -tag -width "/etc/deadman.conf" -compact
+.It Pa /etc/deadman.conf
+.El
+.Sh EXAMPLES
+A nightly backup that pings when it finishes, given a day's grace, and a
+mail queue check that pings every five minutes:
+.Bd -literal -offset indent
+# name		token				period	grace	mailto
+backups		6b1e0c3f9a7d42e8b5c1d0f4a2e9c7b3	1d	1d	root
+mailq		0f4a2e9c7b36b1e0c3f9a7d42e8b5c1d	5m	10m	ops@example.org
+.Ed
+.Sh SEE ALSO
+.Xr deadman 8 ,
+.Xr deadman.cgi 8

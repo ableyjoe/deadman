@@ -1,0 +1,5 @@
+obj/
+*.o
+*.d
+/deadman/deadman
+/deadman.cgi/deadman.cgi
