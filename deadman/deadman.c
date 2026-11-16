@@ -710,7 +710,14 @@ main(int argc, char *argv[])
 	} else {
 		if (unveil(pingdir, "rwc") == -1 ||
 		    unveil(statedir, "rwc") == -1 ||
-		    unveil(sendmail, "x") == -1 || unveil(NULL, NULL) == -1)
+		    unveil(sendmail, "x") == -1)
+			err(1, "unveil");
+#ifdef DEADMAN_TESTING
+		/* The tests' stand-in for sendmail is a shell script. */
+		if (unveil("/bin/sh", "x") == -1)
+			err(1, "unveil");
+#endif
+		if (unveil(NULL, NULL) == -1)
 			err(1, "unveil");
 		if (pledge("stdio rpath wpath cpath fattr proc exec", NULL) == -1)
 			err(1, "pledge");

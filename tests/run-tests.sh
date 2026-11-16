@@ -2,8 +2,13 @@
 #
 # Builds deadman and deadman.cgi with -DDEADMAN_TESTING, which lets the
 # environment set their directories and the time, and runs them through
-# simulated days. Prints TAP; exits non-zero if any test fails. pledge(2)
-# and unveil(2) are no-ops off OpenBSD, so these tests cannot check them.
+# simulated days. Prints TAP; exits non-zero if any test fails. Off
+# OpenBSD, pledge(2) and unveil(2) are no-ops, so only on OpenBSD do these
+# tests check them too.
+#
+# Keep this portable: it runs under OpenBSD's sh and ksh as well as dash
+# and bash, so no GNU options (stat -c, touch -d @SECONDS, env -u, \r in
+# sed); tests/filetime.c does what stat and touch would.
 #
 #   sh tests/run-tests.sh
 
@@ -15,10 +20,12 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/deadman-test.XXXXXX") || exit 1
 trap 'rm -rf "$work"' EXIT
 
 CC=${CC:-cc}
-CFLAGS="-std=c99 -D_GNU_SOURCE -DDEADMAN_TESTING -I$top -Wall -Wextra -Werror"
+# _GNU_SOURCE is for glibc; OpenBSD ignores it.
+CFLAGS="-D_GNU_SOURCE -DDEADMAN_TESTING -I$top -Wall -Wextra -Werror"
 # shellcheck disable=SC2086 # CFLAGS holds several flags
 if ! $CC $CFLAGS -o "$work/deadman" "$top/deadman/deadman.c" ||
-    ! $CC $CFLAGS -o "$work/deadman.cgi" "$top/deadman.cgi/deadman.cgi.c"; then
+    ! $CC $CFLAGS -o "$work/deadman.cgi" "$top/deadman.cgi/deadman.cgi.c" ||
+    ! $CC $CFLAGS -o "$work/filetime" "$here/filetime.c"; then
     echo "Bail out! cannot build"
     exit 1
 fi
@@ -84,12 +91,15 @@ ping() {
     REQUEST_METHOD=GET PATH_INFO=$_path "$work/deadman.cgi" >"$work/cgi.out" || return 1
     # deadman.cgi stamps the file with the real time; move it to the simulated time.
     _file="$DEADMAN_PINGDIR/${3:-$T1}${2:+.$2}"
-    [ ! -f "$_file" ] || touch -d "@$_t" "$_file"
+    [ ! -f "$_file" ] || "$work/filetime" "$_t" "$_file"
 }
 
 cgi() { # cgi METHOD PATH_INFO: the response's status line
-    env -u PATH_INFO REQUEST_METHOD="$1" ${2:+PATH_INFO="$2"} "$work/deadman.cgi" |
-        sed -n '1s/\r$//p'
+    (
+        unset PATH_INFO
+        if [ -n "$2" ]; then PATH_INFO=$2; export PATH_INFO; fi
+        REQUEST_METHOD=$1 "$work/deadman.cgi"
+    ) | sed -n 1p | tr -d '\r'
 }
 
 mails() { grep -c '^Subject:' "$MAILBOX"; }
@@ -116,7 +126,11 @@ expect_no_mail() {
     mark
 }
 state_of() { at "$1" status | awk -v n=backups '$1 == n { print $2 }'; }
-mtime() { stat -c %Y "$1"; }
+mtime() { "$work/filetime" "$1"; }
+# shellcheck disable=SC2012 # find -printf is not portable, and the names are ours
+mode() { ls -l "$1" | cut -c 1-10; }
+exist() { for _f; do [ -e "$_f" ] || return 1; done; }
+absent() { for _f; do [ ! -e "$_f" ] || return 1; done; }
 
 # ---- deadman token ------------------------------------------------------------
 
@@ -131,20 +145,21 @@ check "different every time" [ "$a" != "$b" ]
 fresh "deadman.cgi"
 at 0
 check "deadman makes each check's ping files" \
-    [ -f "$DEADMAN_PINGDIR/$T1" ] && [ -f "$DEADMAN_PINGDIR/$T1.start" ] && [ -f "$DEADMAN_PINGDIR/$T1.fail" ]
+    exist "$DEADMAN_PINGDIR/$T1" "$DEADMAN_PINGDIR/$T1.start" "$DEADMAN_PINGDIR/$T1.fail"
 check "dated the epoch, so they read as never" [ "$(mtime "$DEADMAN_PINGDIR/$T1")" -eq 0 ]
 check "writable by the group, which httpd's user is in" \
-    [ "$(stat -c %a "$DEADMAN_PINGDIR/$T1")" = 620 ]
+    [ "$(mode "$DEADMAN_PINGDIR/$T1")" = "-rw--w----" ]
 
 check "a ping is a 200" [ "$(cgi GET "/ping/$T1")" = "Status: 200 OK" ]
 check "and records the time" [ "$(mtime "$DEADMAN_PINGDIR/$T1")" -gt 0 ]
 check "with a body saying OK" sh -c "REQUEST_METHOD=GET PATH_INFO=/ping/$T1 '$work/deadman.cgi' | tail -n 1 | grep -qx OK"
-check "/start is recorded separately" [ "$(cgi GET "/ping/$T1/start")" = "Status: 200 OK" ] &&
-    [ "$(mtime "$DEADMAN_PINGDIR/$T1.start")" -gt 0 ]
-check "and so is /fail" [ "$(cgi POST "/ping/$T1/fail")" = "Status: 200 OK" ] &&
-    [ "$(mtime "$DEADMAN_PINGDIR/$T1.fail")" -gt 0 ]
+check "/start is a 200" [ "$(cgi GET "/ping/$T1/start")" = "Status: 200 OK" ]
+check "and is recorded separately" [ "$(mtime "$DEADMAN_PINGDIR/$T1.start")" -gt 0 ]
+check "so is /fail" [ "$(cgi POST "/ping/$T1/fail")" = "Status: 200 OK" ]
+check "and it too is recorded separately" [ "$(mtime "$DEADMAN_PINGDIR/$T1.fail")" -gt 0 ]
 check "POST works as well as GET" [ "$(cgi POST "/ping/$T1")" = "Status: 200 OK" ]
-check "HEAD gets no body" [ "$(REQUEST_METHOD=HEAD PATH_INFO=/ping/$T1 "$work/deadman.cgi" | wc -l)" -eq 4 ]
+check "HEAD gets no body" \
+    [ "$(REQUEST_METHOD=HEAD PATH_INFO=/ping/$T1 "$work/deadman.cgi" | wc -l | tr -d ' ')" = 4 ]
 check "any prefix will do" [ "$(cgi GET "/other/place/$T1")" = "Status: 200 OK" ]
 
 check "an unknown token is a 404" [ "$(cgi GET "/ping/$T2")" = "Status: 404 Not Found" ]
@@ -265,9 +280,12 @@ fresh "changing the configuration"
 at 0
 printf '%s\n' "renamed  $T2  1h  10m  ops@example.org" >"$CONF"
 at 60
-check "a token no longer configured stops working" [ ! -e "$DEADMAN_PINGDIR/$T1" ] && [ ! -e "$DEADMAN_PINGDIR/$T1.fail" ]
+check "a token no longer configured stops working" \
+    absent "$DEADMAN_PINGDIR/$T1" "$DEADMAN_PINGDIR/$T1.start" "$DEADMAN_PINGDIR/$T1.fail"
 check "and its state goes" [ ! -e "$DEADMAN_STATEDIR/backups" ]
-check "the new one works" [ -f "$DEADMAN_PINGDIR/$T2" ] && [ "$(cgi GET "/ping/$T2")" = "Status: 200 OK" ]
+check "the new one's files are made" \
+    exist "$DEADMAN_PINGDIR/$T2" "$DEADMAN_PINGDIR/$T2.start" "$DEADMAN_PINGDIR/$T2.fail"
+check "and it works" [ "$(cgi GET "/ping/$T2")" = "Status: 200 OK" ]
 check "and the old one is a 404" [ "$(cgi GET "/ping/$T1")" = "Status: 404 Not Found" ]
 
 echo "# deadman.conf errors"

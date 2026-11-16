@@ -62,8 +62,10 @@ On OpenBSD, as root where it says `doas`:
 2. **Build and install.** git is a package, not part of base
    (`doas pkg_add git`). `make install` puts `deadman` in
    `/usr/local/sbin`, `deadman.cgi` in `/var/www/cgi-bin`, the manual pages
-   in `/usr/local/man`, and an empty `/etc/deadman.conf`, and makes
-   `/var/www/deadman` and `/var/db/deadman`:
+   in `/usr/local/man`, an example configuration in
+   `/usr/local/share/examples/deadman`, and a copy of it in
+   `/etc/deadman.conf` if there is none yet, and makes `/var/www/deadman`
+   and `/var/db/deadman`:
 
    ```sh
    git clone https://github.com/ableyjoe/deadman
@@ -156,9 +158,14 @@ make test
 The tests build both programs with `-DDEADMAN_TESTING`, which lets the
 environment set their directories and the time, and run them through
 simulated days, with a stand-in for sendmail. They need only a C compiler
-and a shell, so they run off OpenBSD too, but there `pledge` and `unveil`
-are no-ops, and only OpenBSD shows whether they are right. Release builds
-contain none of the testing code.
+and a shell. On OpenBSD, the programs run under `pledge` and `unveil` as
+they would in use, so the tests also catch anything those forbid; on
+other systems, where `pledge` and `unveil` are no-ops, they cannot.
+Release builds contain none of the testing code.
+
+`make DESTDIR=/some/where install` installs into a staging directory, as
+for a package, and leaves the `_deadman` user, its two directories and
+`/etc/deadman.conf` to whatever installs the result.
 
 [AGENTS.md](AGENTS.md) explains why deadman is the way it is, for anyone
 changing it.

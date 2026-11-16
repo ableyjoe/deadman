@@ -67,8 +67,10 @@ To revoke a token, change or remove its line: on its next run,
 .Xr deadman 8
 removes the old token's ping files, and its URL stops working.
 .Sh FILES
-.Bl -tag -width "/etc/deadman.conf" -compact
+.Bl -tag -width "/usr/local/share/examples/deadman/deadman.conf" -compact
 .It Pa /etc/deadman.conf
+.It Pa /usr/local/share/examples/deadman/deadman.conf
+An example to start from.
 .El
 .Sh EXAMPLES
 A nightly backup that pings when it finishes, given a day's grace, and a

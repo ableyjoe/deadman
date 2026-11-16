@@ -41,13 +41,21 @@ Next: an OpenBSD port, to submit to the ports maintainers.
 | `deadman.conf` | installed as `/etc/deadman.conf` if there is none |
 | `Makefile`, `deadman/Makefile`, `deadman.cgi/Makefile` | `bsd.subdir.mk` and `bsd.prog.mk`; `make test` |
 | `tests/run-tests.sh` | the tests |
+| `tests/filetime.c` | gets and sets file times for the tests, since stat(1) and touch(1) differ between systems |
 
-`deadman/Makefile` installs `deadman` in `/usr/local/sbin` and its manual
-pages in `/usr/local/man`; its `beforeinstall` refuses to go on without
-the `_deadman` user, and its `afterinstall` makes the two directories and
-installs `/etc/deadman.conf`, 0600, if there is none.
+`deadman/Makefile` installs `deadman` in `/usr/local/sbin`, its manual
+pages in `/usr/local/man`, and `deadman.conf` as an example in
+`/usr/local/share/examples/deadman`. Its `beforeinstall` refuses to go on
+without the `_deadman` user, and its `afterinstall` makes the two
+directories and installs `/etc/deadman.conf`, 0600, if there is none.
 `deadman.cgi/Makefile` installs `deadman.cgi`, static, in
 `/var/www/cgi-bin`.
+
+With `DESTDIR` set, as when the ports framework stages a package, both
+Makefiles make the directories they install into, and skip the user
+check, the two directories and `/etc/deadman.conf`: the package does
+those, and the build machine may have no `_deadman`. The ports framework
+also strips `-o` and `-g` from `install` while staging.
 
 ## Design decisions, and why
 
@@ -92,10 +100,13 @@ installs `/etc/deadman.conf`, 0600, if there is none.
 - **`status` is the dashboard**, so its output is for people and for
   awk: fixed columns, no blanks at the ends of lines.
 - **Testing builds only.** `-DDEADMAN_TESTING` lets the environment set
-  the directories, sendmail and the time, and skips the privilege drop;
-  off OpenBSD, `deadman.h` turns `pledge` and `unveil` into no-ops.
-  Release builds have none of that: environment variables must never
-  redirect a program that starts as root.
+  the directories, sendmail and the time, skips the privilege drop, and
+  unveils `/bin/sh` too, because the tests' stand-in for sendmail is a
+  script, whose interpreter may need unveiling for it to run (cheaper to
+  allow than to find out); off OpenBSD, `deadman.h` turns
+  `pledge` and `unveil` into no-ops. Release builds have none of that:
+  environment variables must never redirect a program that starts as
+  root.
 
 ## Learnt on OpenBSD
 
@@ -135,7 +146,13 @@ make test                                  # or: sh tests/run-tests.sh
 mandoc -T lint -W warning deadman/*.[58] deadman.cgi/*.8
 ```
 
-The tests need only a C compiler and a shell, so they run on Linux too.
+The tests need only a C compiler and a shell, and must run on OpenBSD,
+where the port runs them and where pledge and unveil are real, as well as
+on Linux. So the script is plain POSIX sh, with no GNU options:
+`tests/filetime.c` stands in for `stat -c` and `touch -d @SECONDS`, and a
+subshell with `unset` for `env -u`. Try it under dash, `bash --posix` and
+mksh (a pdksh, like OpenBSD's sh) as well as sh, with gcc and clang.
+
 They build both programs with `-DDEADMAN_TESTING -Werror`, set `TZ=UTC`,
 and run them through simulated days from a fixed time, `BASE`
 (18 November 2026, 11:06:40 UTC); a stand-in for sendmail appends to a

@@ -11,4 +11,11 @@ CFLAGS+=	-Wall -Wextra -Wstrict-prototypes -Wmissing-prototypes
 CFLAGS+=	-Wmissing-declarations -Wshadow -Wpointer-arith -Wcast-qual
 CFLAGS+=	-Wsign-compare
 
+# An install into DESTDIR, as for a package, makes the directories it
+# installs into.
+.if !empty(DESTDIR)
+beforeinstall:
+	${INSTALL} -d ${DESTDIR}${BINDIR} ${DESTDIR}${MANDIR}8
+.endif
+
 .include <bsd.prog.mk>
