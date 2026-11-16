@@ -1,6 +1,6 @@
 COMMENT =	send mail when jobs stop checking in
 
-V =		1.0
+V =		1.1
 DISTNAME =	deadman-${V}
 
 CATEGORIES =	sysutils
