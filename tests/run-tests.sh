@@ -252,10 +252,14 @@ at $((2 * DAY + 120))
 expect_mail "so the next real run still sends it" "backups is down"
 
 fresh "deadman status"
+printf '%s\n' "quiet  $T2  1h  10m  ops@example.org" >>"$CONF"
+at 0
 ping 0
 at 0 status >"$work/status"
 check "has a heading" grep -q '^NAME  *STATE  *LAST PING  *DUE' "$work/status"
 check "lists each check" grep -q '^backups  *up  *2026-11-18 11:06 UTC  *2026-11-19 11:06 UTC' "$work/status"
+check "including one that has never pinged" grep -q '^quiet  *new  *never$' "$work/status"
+check "with no blanks at the ends of lines" refute grep -q ' $' "$work/status"
 
 fresh "changing the configuration"
 at 0

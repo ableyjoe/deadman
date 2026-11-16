@@ -59,16 +59,24 @@ On OpenBSD, as root where it says `doas`:
    doas useradd -c deadman -d /var/empty -s /sbin/nologin -g =uid _deadman
    ```
 
-2. **Build and install.** This puts `deadman` in `/usr/local/sbin`,
-   `deadman.cgi` in `/var/www/cgi-bin`, the manual pages in
-   `/usr/local/man`, and an empty `/etc/deadman.conf`, and makes
+2. **Build and install.** git is a package, not part of base
+   (`doas pkg_add git`). `make install` puts `deadman` in
+   `/usr/local/sbin`, `deadman.cgi` in `/var/www/cgi-bin`, the manual pages
+   in `/usr/local/man`, and an empty `/etc/deadman.conf`, and makes
    `/var/www/deadman` and `/var/db/deadman`:
 
    ```sh
+   git clone https://github.com/ableyjoe/deadman
+   cd deadman
    make
    doas make install
-   file /var/www/cgi-bin/deadman.cgi    # should say "statically linked"
+   ldd /var/www/cgi-bin/deadman.cgi    # should list nothing but deadman.cgi
    ```
+
+   `deadman.cgi` runs in httpd's chroot, which has no shared libraries, so
+   it must be static. Ask `ldd`, not `file`: OpenBSD links static programs
+   as position-independent executables, which `file` calls "shared
+   objects".
 
 3. **slowcgi:**
 
@@ -77,9 +85,31 @@ On OpenBSD, as root where it says `doas`:
    doas rcctl start slowcgi
    ```
 
-4. **httpd:** add a server for the ping URLs, with the example in
-   `deadman.cgi(8)`, and a certificate for its name from acme-client. Then
-   `doas rcctl reload httpd`.
+4. **A name, a certificate, and httpd.** Give the ping URLs a name of
+   their own; a CNAME for the host will do. If the name's DNS is on a CDN
+   such as Cloudflare, make the record DNS only: a proxy would see every
+   token, and may turn away requests that do not come from a browser.
+
+   Then, in this order, since httpd will not load a TLS server whose
+   certificate does not exist yet:
+
+   - in `/etc/httpd.conf`, a server for the name on port 80, for
+     acme-client's challenges, like the first one in
+     `/etc/examples/httpd.conf`; then `doas rcctl reload httpd`;
+   - in `/etc/acme-client.conf`, a `domain` block for the name, like the
+     one in `/etc/examples/acme-client.conf`; then
+     `doas acme-client -v deadman.example.org`;
+   - in `/etc/httpd.conf`, the TLS server from the example in
+     `deadman.cgi(8)`; then `doas rcctl reload httpd` again.
+
+   acme-client renews a certificate only when it is close to expiring, so
+   it wants running daily. It exits 2 when there was nothing to renew,
+   which cron's `-n` flag would take for a failure, so `/etc/daily.local`
+   is the place for it, beside any other certificates the host has:
+
+   ```sh
+   acme-client deadman.example.org && rcctl reload httpd
+   ```
 
 5. **cron:** add this to root's crontab with `doas crontab -e`. It runs
    deadman every minute, one at a time, mailing root only if it fails:
@@ -100,7 +130,7 @@ On OpenBSD, as root where it says `doas`:
    starts working:
 
    ```sh
-   curl -fsS https://deadman.example.org/ping/TOKEN; echo
+   ftp -V -o - https://deadman.example.org/ping/TOKEN    # says OK
    doas deadman status
    ```
 
@@ -129,6 +159,9 @@ simulated days, with a stand-in for sendmail. They need only a C compiler
 and a shell, so they run off OpenBSD too, but there `pledge` and `unveil`
 are no-ops, and only OpenBSD shows whether they are right. Release builds
 contain none of the testing code.
+
+[AGENTS.md](AGENTS.md) explains why deadman is the way it is, for anyone
+changing it.
 
 ## Licence
 

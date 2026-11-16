@@ -590,6 +590,25 @@ cmd_check(void)
 	return ret;
 }
 
+/*
+ * One line of status output, without the blanks that the padding leaves at
+ * its end when the last columns are empty.
+ */
+static void
+status_line(int width, const char *name, const char *state, const char *last,
+    const char *due, const char *note)
+{
+	char	 line[256];
+	size_t	 n;
+
+	snprintf(line, sizeof(line), "%-*s  %-5s  %-21s  %s%s", width, name,
+	    state, last, due, note);
+	n = strlen(line);
+	while (n > 0 && line[n - 1] == ' ')
+		line[--n] = '\0';
+	puts(line);
+}
+
 static int
 cmd_status(void)
 {
@@ -605,8 +624,7 @@ cmd_status(void)
 	for (i = 0; i < nchecks; i++)
 		if ((int)strlen(checks[i].name) > width)
 			width = strlen(checks[i].name);
-	printf("%-*s  %-5s  %-21s  %-21s\n", width, "NAME", "STATE",
-	    "LAST PING", "DUE");
+	status_line(width, "NAME", "STATE", "LAST PING", "DUE", "");
 	for (i = 0; i < nchecks; i++) {
 		c = &checks[i];
 		read_pings(c, 0);
@@ -614,8 +632,8 @@ cmd_status(void)
 		note = running ? "  (running)" :
 		    why == W_FAILED ? "  (reported a failure)" :
 		    why == W_UNFINISHED ? "  (started, never finished)" : "";
-		printf("%-*s  %-5s  %-21s  %-21s%s\n", width, c->name,
-		    state_names[state], fmt_time(c->ping, last, sizeof(last)),
+		status_line(width, c->name, state_names[state],
+		    fmt_time(c->ping, last, sizeof(last)),
 		    due == 0 ? "" : fmt_time(due, next, sizeof(next)), note);
 	}
 	return 0;
