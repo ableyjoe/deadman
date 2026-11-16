@@ -29,8 +29,13 @@ so give commands to type, one step at a time, and ask for their output.
 He uses ksh and doas. Tokens are capabilities: never put a real one, or
 the author's ping URLs, in the repository.
 
-`port/` is an OpenBSD port, for submission to the ports tree; see
-"Releases, and the port" below.
+`port/` is an OpenBSD port, `sysutils/deadman`. The author submitted it,
+at 1.1, to ports@openbsd.org on 16 November 2026 ("NEW:
+sysutils/deadman"), saying plainly that it and deadman were written with
+an AI assistant: OpenBSD's project leader has said the project cannot
+accept AI-generated code, though there is no written policy. Bring
+reviewers' comments back to this file. See "Releases, and the port"
+below.
 
 ## Files
 
