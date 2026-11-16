@@ -43,6 +43,7 @@ the author's ping URLs, in the repository.
 | `Makefile`, `deadman/Makefile`, `deadman.cgi/Makefile` | `bsd.subdir.mk` and `bsd.prog.mk`; `make test` |
 | `tests/run-tests.sh` | the tests |
 | `tests/filetime.c` | gets and sets file times for the tests, since stat(1) and touch(1) differ between systems |
+| `tests/fuzz.py` | fuzzes both parsers under sanitizers; an extra, not run by `make test` |
 | `port/` | the OpenBSD port, `sysutils/deadman`, laid out as in the ports tree |
 
 `deadman/Makefile` installs `deadman` in `/usr/local/sbin`, its manual
@@ -92,7 +93,10 @@ also strips `-o` and `-g` from `install` while staging.
   reading the config as root kept nothing secret. Started as root, as by
   `doas deadman status`, it drops to `_deadman` (`setgroups`,
   `setresgid`, `setresuid`) before reading anything; started as anyone
-  else, it stays as it is and file permissions decide. It then unveils
+  else, it stays as it is and file permissions decide. Like doas with
+  `doas.conf`, it refuses a config not owned by root, writable by group
+  or others, or readable by others, so a careless chmod cannot hand the
+  tokens to every local user. It then unveils
   the config, its two directories and `sendmail`, pledges `stdio rpath
   wpath cpath fattr proc exec` (`stdio rpath` for `status` and `-n`), and
   only then reads the config. `tzset()` and `gethostname()` happen before
@@ -109,7 +113,9 @@ also strips `-o` and `-g` from `install` while staging.
 - **`status` is the dashboard**, so its output is for people and for
   awk: fixed columns, no blanks at the ends of lines.
 - **Testing builds only.** `-DDEADMAN_TESTING` lets the environment set
-  the directories, sendmail and the time, skips the privilege drop, and
+  the directories, sendmail and the time, skips the privilege drop,
+  expects the config to belong to whoever runs the tests rather than
+  root, and
   unveils `/bin/sh` too, because the tests' stand-in for sendmail is a
   script, whose interpreter may need unveiling for it to run (cheaper to
   allow than to find out); off OpenBSD, `deadman.h` turns
@@ -245,6 +251,10 @@ on Linux. So the script is plain POSIX sh, with no GNU options:
 subshell with `unset` for `env -u`. Try it under dash, `bash --posix` and
 mksh (a pdksh, like OpenBSD's sh) as well as sh, with gcc and clang.
 
+They set `umask 027`, since deadman refuses a config others can read,
+and the test of a config not owned by root runs only when the tests run
+as root, since no one else can give a file away.
+
 They build both programs with `-DDEADMAN_TESTING -Werror`, set `TZ=UTC`,
 and run them through simulated days from a fixed time, `BASE`
 (18 November 2026, 11:06:40 UTC); a stand-in for sendmail appends to a
@@ -253,6 +263,13 @@ are turned away until it has made the ping files; `ping` calls the CGI as
 httpd would and then moves the file's time to the simulated one; `at`
 runs deadman at a time; `expect_mail` and `expect_no_mail` count new
 messages.
+
+`tests/fuzz.py` is an extra, not run by `make test`: it builds both
+programs with gcc's address and undefined-behaviour sanitizers and throws
+random requests at the CGI and random lines at the config parser,
+comparing the answers with small models of what each should accept. It
+found the overflow in `parse_duration` that 1.1 fixed. It needs python3
+and gcc: `python3 tests/fuzz.py . /tmp/deadman-fuzz 6000 4000`.
 
 Every behaviour change gets tests. A bug fix gets a test that fails
 without the fix. When adding tests, break the code on purpose and check

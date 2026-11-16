@@ -46,6 +46,8 @@
 
 #include "deadman.h"
 
+#define MAX_DURATION	(10LL * 366 * 24 * 60 * 60)	/* ten years */
+
 enum state { S_NEW, S_UP, S_LATE, S_DOWN };
 static const char *state_names[] = { "new", "up", "late", "down" };
 
@@ -73,6 +75,36 @@ static const char	*sendmail = _PATH_SENDMAIL;
 static char		 hostname[HOST_NAME_MAX + 1];
 static time_t		 now;
 static int		 noaction;
+static uid_t		 confowner;	/* root, but in tests whoever runs them */
+
+static __dead void	 usage(void);
+static int		 parse_duration(const char *, time_t *);
+static const char	*fmt_duration(time_t, char *, size_t);
+static const char	*fmt_time(time_t, char *, size_t);
+static int		 valid_name(const char *);
+static int		 valid_mailto(const char *);
+static void		 add_check(const char *, int, char **);
+static void		 read_config(const char *);
+static void		 drop_privileges(void);
+static void		 ping_path(char *, size_t, const struct check *, int);
+static void		 read_pings(struct check *, int);
+static int		 known_ping_file(const char *);
+static int		 known_state_file(const char *);
+static void		 remove_stale(const char *, int (*)(const char *));
+static enum state	 assess(const struct check *, enum why *, time_t *,
+			    int *);
+static void		 read_state(const struct check *, enum state *,
+			    time_t *);
+static void		 write_state(const struct check *, enum state);
+static int		 send_mail(const char *, const char *, const char *);
+static const char	*fmt_every(time_t, char *, size_t);
+static int		 notify_down(const struct check *, enum why);
+static int		 notify_up(const struct check *, time_t);
+static int		 cmd_check(void);
+static void		 status_line(int, const char *, const char *,
+			    const char *, const char *, const char *);
+static int		 cmd_status(void);
+static int		 cmd_token(void);
 
 static __dead void
 usage(void)
@@ -81,12 +113,15 @@ usage(void)
 	exit(1);
 }
 
-/* "90s", "15m", "36h", "1d" or "2w", to seconds. */
+/*
+ * "90s", "15m", "36h", "1d" or "2w", to seconds. Anything over ten years
+ * is a typo, and checking that before multiplying avoids overflow.
+ */
 static int
 parse_duration(const char *s, time_t *t)
 {
 	char		*end;
-	long long	 n;
+	long long	 n, unit;
 
 	errno = 0;
 	n = strtoll(s, &end, 10);
@@ -94,25 +129,26 @@ parse_duration(const char *s, time_t *t)
 		return -1;
 	switch (end[0]) {
 	case 's':
+		unit = 1;
 		break;
 	case 'm':
-		n *= 60;
+		unit = 60;
 		break;
 	case 'h':
-		n *= 60 * 60;
+		unit = 60 * 60;
 		break;
 	case 'd':
-		n *= 24 * 60 * 60;
+		unit = 24 * 60 * 60;
 		break;
 	case 'w':
-		n *= 7 * 24 * 60 * 60;
+		unit = 7 * 24 * 60 * 60;
 		break;
 	default:
 		return -1;
 	}
-	if (n > 10LL * 366 * 24 * 60 * 60)	/* over ten years: a typo */
+	if (n > MAX_DURATION / unit)
 		return -1;
-	*t = n;
+	*t = n * unit;
 	return 0;
 }
 
@@ -133,7 +169,7 @@ fmt_duration(time_t t, char *buf, size_t size)
 	size_t	 i;
 
 	for (i = 0; t % units[i].secs != 0; i++)
-		;
+		continue;
 	t /= units[i].secs;
 	snprintf(buf, size, "%lld %s%s", (long long)t, units[i].unit,
 	    t == 1 ? "" : "s");
@@ -156,8 +192,9 @@ fmt_time(time_t t, char *buf, size_t size)
 static int
 valid_name(const char *s)
 {
-	size_t	 len = strlen(s), i;
+	size_t	 len, i;
 
+	len = strlen(s);
 	if (len == 0 || len > 64 || s[0] == '.' || s[0] == '-')
 		return 0;
 	for (i = 0; i < len; i++)
@@ -217,13 +254,23 @@ add_check(const char *file, int lineno, char **field)
 static void
 read_config(const char *file)
 {
-	FILE	*fp;
-	char	*line = NULL, *p, *field[5];
-	size_t	 linesize = 0;
-	int	 lineno = 0, n;
+	struct stat	 sb;
+	FILE		*fp;
+	char		*line = NULL, *p, *field[5];
+	size_t		 linesize = 0;
+	int		 lineno = 0, n;
 
 	if ((fp = fopen(file, "r")) == NULL)
 		err(1, "%s", file);
+	/* The tokens are capabilities: only root may change them. */
+	if (fstat(fileno(fp), &sb) == -1)
+		err(1, "%s", file);
+	if (sb.st_uid != confowner)
+		errx(1, "%s: not owned by root", file);
+	if (sb.st_mode & (S_IWGRP | S_IWOTH))
+		errx(1, "%s: writable by group or others", file);
+	if (sb.st_mode & S_IROTH)
+		errx(1, "%s: readable by others", file);
 	while (getline(&line, &linesize, fp) != -1) {
 		lineno++;
 		if ((p = strchr(line, '#')) != NULL)
@@ -699,6 +746,7 @@ main(int argc, char *argv[])
 		statedir = getenv("DEADMAN_STATEDIR");
 	if (getenv("DEADMAN_SENDMAIL") != NULL)
 		sendmail = getenv("DEADMAN_SENDMAIL");
+	confowner = geteuid();
 #endif
 	signal(SIGPIPE, SIG_IGN);
 	tzset();

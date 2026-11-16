@@ -66,6 +66,9 @@ which runs as the
 user, should be able to read the file: it should belong to root and group
 .Dq _deadman ,
 and be mode 0640.
+.Xr deadman 8
+refuses it if it does not belong to root, if its group or others can
+write to it, or if others can read it.
 To revoke a token, change or remove its line: on its next run,
 .Xr deadman 8
 removes the old token's ping files, and its URL stops working.

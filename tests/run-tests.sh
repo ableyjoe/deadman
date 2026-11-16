@@ -13,6 +13,8 @@
 #   sh tests/run-tests.sh
 
 set -u
+# deadman refuses a configuration others can read; keep everything private.
+umask 027
 
 here=$(cd "$(dirname "$0")" && pwd)
 top=$(dirname "$here")
@@ -302,9 +304,33 @@ bad "too few fields" "a $T1 1d 1d" "expected name, token, period, grace and mail
 bad "too many" "a $T1 1d 1d x@y z@y" "too many fields"
 bad "a bad name" "../a $T1 1d 1d x@y" "bad name"
 bad "a mailto that is an option" "a $T1 1d 1d -oQ/tmp" "bad mailto"
+# 30500568904944 weeks overflows a 64-bit count of seconds, to about a week.
+bad "a period so long it would overflow" "a $T1 30500568904944w 1d x@y" "bad period"
+bad "a grace time likewise" "a $T1 1d 30500568904944w x@y" "bad grace"
 printf '%s\n%s\n' "a $T1 1d 1d x@y" "b $T1 1d 1d x@y" >"$CONF"
 check "a token used twice" sh -c "DEADMAN_NOW=$BASE '$work/deadman' -f '$CONF' 2>&1 | grep -q 'b has the same token as a'"
 check "a missing file" sh -c "'$work/deadman' -f '$work/nonexistent' 2>&1 | grep -q 'nonexistent'"
+
+echo "# deadman.conf permissions"
+refused() { # refused DESCRIPTION MESSAGE
+    check "$1" sh -c "'$work/deadman' -f '$CONF' status 2>&1 | grep -q '$CONF: $2'"
+}
+printf '%s\n' "a $T1 1d 1d x@y" >"$CONF"
+chmod 0640 "$CONF"
+check "mode 0640 will do" quietly "$work/deadman" -f "$CONF" status
+chmod 0644 "$CONF"
+refused "but one that others can read is refused" "readable by others"
+chmod 0660 "$CONF"
+refused "as is one that its group can write" "writable by group or others"
+chmod 0642 "$CONF"
+refused "or that others can write" "writable by group or others"
+chmod 0640 "$CONF"
+if [ "$(id -u)" -eq 0 ]; then
+    chown nobody "$CONF"
+    refused "or one that is not root's" "not owned by root"
+else
+    ok "or one that is not root's # SKIP the tests are not running as root"
+fi
 check "an unknown command" refute quietly "$work/deadman" frobnicate
 
 echo "1..$tests"

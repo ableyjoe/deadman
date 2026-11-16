@@ -45,8 +45,9 @@ schedules, and any alert but mail. `deadman status` is the dashboard.
 - **The checking side never needs root.** `deadman` runs from the
   `_deadman` user's crontab, as `_deadman`, which owns its two
   directories. Its configuration holds the tokens, so only `_deadman` may
-  read it (owner root, group `_deadman`, mode 0640); `_deadman` could see
-  them anyway, as the names of the ping files. Started as root, as by
+  read it (owner root, group `_deadman`, mode 0640), and deadman refuses
+  one that others can read or anyone but root can change; `_deadman` could
+  see the tokens anyway, as the names of the ping files. Started as root, as by
   `doas deadman status`, it becomes `_deadman` before reading anything.
   `pledge` and `unveil` confine it to its configuration, its two
   directories and `sendmail`.

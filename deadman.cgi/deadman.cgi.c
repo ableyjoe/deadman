@@ -37,7 +37,9 @@
 
 #include "deadman.h"
 
-static void
+static __dead void	respond(int, int, const char *);
+
+static __dead void
 respond(int head, int code, const char *reason)
 {
 	printf("Status: %d %s\r\n"
