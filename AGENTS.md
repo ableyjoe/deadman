@@ -233,13 +233,23 @@ Building the port, as on the author's host for v1.0 (OpenBSD 8.0, with
   without `keepenv` or `setenv` drops, so `pkg_add` refuses the unsigned
   package and says it cannot find it. `doas pkg_add -D unsigned
   /usr/ports/packages/amd64/all/deadman-V.tgz` works.
+- To replace an installed version with a newer package file, use
+  `pkg_add -r -D unsigned FILE`. `-u` takes the names of installed
+  packages and looks for them on `PKG_PATH`, so given a file it says
+  "Problem finding" and does nothing. The update keeps
+  `/etc/deadman.conf`, and says so.
+- Going from 1.0 to 1.1 on the author's host followed the README's
+  "Upgrading from 1.0": the config's group and mode first, then the
+  package, then the deadman line out of root's crontab and into
+  `_deadman`'s, in that order so that no two runs overlap.
 - To replace an installation from source, remove its six files first
   (the two programs, three manual pages and the example), since
   `pkg_add` will not overwrite files no package owns. The user,
   `/etc/deadman.conf`, and the ping and state files stay. Cron fails
   each minute until the package is in, mailing root each time.
 - For v1.0, `make test`, `make package`, `make port-lib-depends-check`
-  and `portcheck` were all clean.
+  and `portcheck` were all clean; for v1.1, `make test` and `make
+  package` were.
 
 ## Testing
 
